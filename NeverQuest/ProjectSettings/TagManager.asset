@@ -1,0 +1,63 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!78 &1
+TagManager:
+  serializedVersion: 2
+  tags:
+  - Stroke
+  - WriteBox
+  - Door
+  - GUI
+  - NPC
+  - Baddy
+  - VertDoor
+  - Music
+  - MessageBox
+  - PickUp
+  - Mask
+  - NPC-SelfDestruct
+  - Placeholder
+  - CV
+  layers:
+  - Default
+  - TransparentFX
+  - Ignore Raycast
+  - 
+  - Water
+  - UI
+  - 
+  - 
+  - Preforeground
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  m_SortingLayers:
+  - name: Default
+    uniqueID: 0
+    locked: 0
+  - name: Foreground
+    uniqueID: 3965492175
+    locked: 0
+  - name: Preforeground
+    uniqueID: 1302734885
+    locked: 0

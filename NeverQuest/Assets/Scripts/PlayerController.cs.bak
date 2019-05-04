@@ -1,0 +1,273 @@
+﻿using UnityEngine.UI;
+using System.Collections;
+using UnityEngine;
+using System.Collections.Generic;
+
+public class PlayerController : MonoBehaviour
+{
+    [HideInInspector] public float currentSpeed;
+    [HideInInspector] public int langNum = 0;
+    [HideInInspector] public Dictionary<int, string> languages = new Dictionary<int, string>();
+    [HideInInspector] public bool writing = false;
+    [HideInInspector] public bool buttonClicked;
+    [HideInInspector] public Dictionary<string, Dictionary<string, Quest>> inProgressQuests;
+    [HideInInspector] public Dictionary<string, bool> rooms;
+    [HideInInspector] public string currScene = "Home";
+    [HideInInspector] public bool switched = false;
+    [HideInInspector] public float health = 100f;
+
+    public float speed;
+    public Animator animator;
+    public int orientation; //0: down; 1: left; 2: up; 3: right;
+    public bool shouldAnimate;
+    public bool frozen;
+
+    private Vector3 target;
+    private Vector3 animate;
+    private GameObject messageBox;
+
+
+
+    void Start()
+    {
+        shouldAnimate = true;
+        GameObject[] objs = GameObject.FindGameObjectsWithTag("Player");
+        inProgressQuests = new Dictionary<string, Dictionary<string, Quest>>();
+        rooms = new Dictionary<string, bool>();
+
+
+        // Player is already created
+        if (objs.Length > 1)
+        {
+            Debug.Log("objs.Length exceeded 1");
+            Destroy(this.gameObject);
+        }
+
+        languages.Add(1, "Korean");
+        languages.Add(2, "Mandarin");
+        languages.Add(3, "Spanish");
+
+        DontDestroyOnLoad(this.gameObject);
+
+        //initialize target to player position
+        target = transform.position;
+        messageBox = GameObject.FindGameObjectWithTag("MessageBox");
+
+        InitializeDictionary();
+    }
+    void Update()
+    {
+        if (frozen)
+            return;
+        if (Input.GetMouseButtonDown(0))
+        {
+            GameObject[] objs = GameObject.FindGameObjectsWithTag("GUI");
+            currentSpeed = speed;
+            target = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+
+            //Set target z to equal player z
+            target.z = transform.position.z;
+            shouldAnimate = true;
+            switched = false;
+            int dir = vecDirection(target - transform.position);
+            UpdateOrientation(dir);
+        }
+
+        if (!writing)
+        {
+            Vector3 movement = Vector3.MoveTowards(transform.position, target, currentSpeed * Time.deltaTime);
+            transform.position = movement;
+            animate = target - transform.position;
+            //Animate the movement:
+            animator.SetFloat("Horizontal", animate.x);
+            animator.SetFloat("Vertical", animate.y);
+            if (messageBox && messageBox.GetComponent<MessageHandler>())
+            {
+                if (shouldAnimate)
+                {
+                    //animator.SetInteger("Direction", orientation);
+                    messageBox.GetComponent<MessageHandler>().Deactivate();
+                    animator.SetFloat("Magnitude", animate.magnitude);
+                }
+                else
+                {
+                    //animator.SetInteger("Direction", orientation);
+                    animator.SetFloat("Magnitude", 0);
+                }
+            }
+        }
+    }
+
+    public void Stop(bool freeze = false)
+    {
+        currentSpeed = 0;
+        shouldAnimate = false;
+        frozen = true;
+    }
+    public void Unfreeze()
+    {
+        currentSpeed = 0.1f;
+        shouldAnimate = true;
+        frozen = false;
+    }
+    private void OnCollisionStay2D(Collision2D collision)
+    {
+        currentSpeed = 0;
+    }
+
+    int vecDirection(Vector3 vec)
+    {
+        vec = Vector3.Normalize(vec);
+        //Debug.Log("X: " + vec.x);
+        //Debug.Log("Y: " + vec.y);
+        if (Mathf.Abs(vec.x) > Mathf.Abs(vec.y))
+        {
+            if (vec.x > 0)
+            {
+                return 3;
+            }
+            else
+            {
+                return 1;
+            }
+        }
+        else
+        {
+            if (vec.y > 0)
+            {
+                return 2;
+            }
+            else
+            {
+                return 0;
+            }
+        }
+    }
+    public void UpdateOrientation(int orientation)
+    {
+        //Debug.Log(orientation);
+        this.orientation = orientation;
+        animator.SetInteger("Direction", orientation);
+    }
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        //Stop player movement
+        currentSpeed = 0;
+        animator.SetFloat("Magnitude", 0);
+
+        shouldAnimate = false;
+
+        //TODO: Refactor to switch with fall through
+        if (collision.gameObject.CompareTag("NPC"))
+        {
+            NpcController npcCont = collision.gameObject.GetComponent<NpcController>();
+            foreach (Dictionary<string, Quest> currQuestMap in inProgressQuests.Values)
+            {
+                foreach (Quest currQuest in currQuestMap.Values)
+                {
+                    //Already Have quest
+                    if (npcCont.myName == currQuest.givenBy)
+                    {
+                        //Done
+                        if (currQuest.completed())
+                        {
+                            messageBox.GetComponent<MessageHandler>().Activate();
+                            npcCont.PlayConvoAfter();
+                            return;
+                        }
+                        //Middle
+                        else
+                        {
+                            messageBox.GetComponent<MessageHandler>().Activate();
+                            npcCont.PlayConvoDuring();
+                            return;
+                        }
+                    }
+                }
+            }
+
+            messageBox.GetComponent<MessageHandler>().Activate();
+            npcCont.PlayConvoBefore();
+
+            Dictionary<string, Quest> tmp = new Dictionary<string, Quest>();
+            tmp.Add(npcCont.quest.location, npcCont.quest);
+
+            inProgressQuests.Add(npcCont.quest.type, tmp);
+
+            GameObject newQuest = Instantiate(npcCont.QuestGuiObject, new Vector3(0, 100 - (30 * (inProgressQuests.Count - 1)), 0), Quaternion.identity);
+            newQuest.name = npcCont.quest.type + npcCont.quest.location;
+            newQuest.transform.SetParent(GameObject.Find("Active Menu").GetComponent<menuSwitch>().menu4.transform, false);
+            newQuest.GetComponentInChildren<Text>().text = npcCont.quest.type + "! Currently " + npcCont.quest.currentAmount + " out of " + npcCont.quest.goalAmount;
+        }
+
+        //Doors
+        else if (collision.gameObject.CompareTag("Door") || collision.gameObject.CompareTag("VertDoor"))
+        {
+            string dest = collision.gameObject.GetComponent<Text>().text;
+
+            if (rooms[dest])
+            {
+                if (collision.gameObject.CompareTag("Door") && !switched)
+                {
+                    currScene = dest;
+                    Debug.Log(dest);
+                    GameObject cam = GameObject.FindGameObjectWithTag("MainCamera");
+                    cam.GetComponent<sceneChange>().flipPlayer(false);
+                    cam.GetComponent<sceneChange>().changeScene(dest);
+                    switched = true;
+
+                    GameObject.FindGameObjectWithTag("GUI").GetComponentInChildren<MiniMap>().UpdateMinimap(dest);
+
+                }
+                //VERTICAL DOORS ARE HANDLED BY THE DOORS THEMSELVES
+                else if (collision.gameObject.CompareTag("VertDoor") && !switched)
+                {
+                    currScene = dest;
+                    Debug.Log(dest);
+                    GameObject cam = GameObject.FindGameObjectWithTag("MainCamera");
+                    cam.GetComponent<sceneChange>().flipPlayer(true);
+                    cam.GetComponent<sceneChange>().changeScene(dest);
+                    switched = true;
+
+                    GameObject.FindGameObjectWithTag("GUI").GetComponentInChildren<MiniMap>().UpdateMinimap(dest);
+
+                }
+            }
+            else
+            {
+                Debug.Log("DENIED");
+            }
+        }
+    }
+
+
+    public void UpdateHealth()
+    {
+        GameObject.Find("RealHealthFront").transform.localScale = new Vector3(Mathf.Max(health / 100f, 0.0f), 1f, 1f);
+
+        if (health <= 0)
+        {
+            print("Player dead");
+            Application.Quit();
+        }
+    }
+
+    //initializing room access
+    private void InitializeDictionary()
+    {
+        rooms["Home"] = true;
+        rooms["Road"] = true;
+        rooms["City"] = true;
+        rooms["Downtown"] = true;
+        rooms["Pier"] = true;
+        rooms["Restaurant"] = true;
+        rooms["Grocery"] = true;
+        rooms["Field"] = true;
+        rooms["HQ"] = false;
+    }
+
+    public void unlockRoom(string scene)
+    {
+        rooms[scene] = true;
+    }
+}
